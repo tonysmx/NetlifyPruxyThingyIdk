@@ -1,10 +1,6 @@
-addEventListener("fetch", event => {
-  event.respondWith(handleRequest(event.request));
-});
+export default async (request, context) => {
+  const TARGET_HOST = "https://gametreexp.github.io";
 
-const TARGET_HOST = "https://gametreexp.github.io";
-
-async function handleRequest(request) {
   // 1. Handle CORS preflight OPTIONS requests
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -31,7 +27,7 @@ async function handleRequest(request) {
 
   const newHeaders = new Headers(response.headers);
 
-  // 3. Strip frame restrictions and enable full CORS for direct fetching
+  // 3. Strip frame restrictions and enable full CORS
   newHeaders.delete("X-Frame-Options");
   newHeaders.delete("Content-Security-Policy");
   newHeaders.delete("Frame-Options");
@@ -42,13 +38,13 @@ async function handleRequest(request) {
   if (contentType.includes("text/html")) {
     let html = await response.text();
 
-    // Rewrite root-relative links (/assets, /css) to Worker origin
+    // Rewrite root-relative links to Netlify origin
     html = html.replace(
       /(src|href|action)=["'](\/[^"']*)["']/gi,
       `$1="${url.origin}$2"`
     );
 
-    // Rewrite absolute links to TARGET_HOST back to Worker origin
+    // Rewrite absolute links to TARGET_HOST back to Netlify origin
     const targetRegex = new RegExp(TARGET_HOST, "gi");
     html = html.replace(targetRegex, url.origin);
 
@@ -64,4 +60,4 @@ async function handleRequest(request) {
     statusText: response.statusText,
     headers: newHeaders
   });
-}
+};
