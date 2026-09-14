@@ -1,8 +1,5 @@
-[build]
-  functions = "netlify/functions"
-
 [[redirects]]
   from = "/*"
-  to = "/.netlify/functions/proxy"
+  to = "https://github.io"
   status = 200
   force = true
