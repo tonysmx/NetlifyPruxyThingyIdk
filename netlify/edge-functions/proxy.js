@@ -5,6 +5,7 @@ export const config = {
 export default async (request, context) => {
   const TARGET_HOST = "https://gametreexp.github.io";
 
+  // 1. Handle CORS preflight OPTIONS requests
   if (request.method === "OPTIONS") {
     return new Response(null, {
       headers: {
@@ -27,6 +28,7 @@ export default async (request, context) => {
     redirect: "follow"
   });
 
+  // Handle redirects back to target host
   if ([301, 302, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
     if (location && location.includes(TARGET_HOST)) {
@@ -47,8 +49,8 @@ export default async (request, context) => {
   if (contentType.includes("text/html")) {
     let html = await response.text();
 
-    // Safely rewrite absolute links back to Netlify origin
-    html = html.replaceAll(TARGET_HOST, url.origin);
+    // Use function replacer to prevent $ / $' special replacement corruption
+    html = html.replaceAll(TARGET_HOST, () => url.origin);
 
     const antiInspectScript = `
 <script>
@@ -67,9 +69,12 @@ export default async (request, context) => {
   })();
 <\/script>`;
 
-    html = html.includes("</body>") 
-      ? html.replace("</body>", `${antiInspectScript}</body>`)
-      : html + antiInspectScript;
+    // Append script safely
+    if (html.includes("</body>")) {
+      html = html.replace("</body>", () => `${antiInspectScript}\n</body>`);
+    } else {
+      html = html + antiInspectScript;
+    }
 
     return new Response(html, {
       status: response.status,
