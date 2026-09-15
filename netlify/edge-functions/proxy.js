@@ -5,7 +5,6 @@ export const config = {
 export default async (request, context) => {
   const TARGET_HOST = "https://gametreexp.github.io";
 
-  // 1. Handle CORS preflight OPTIONS requests
   if (request.method === "OPTIONS") {
     return new Response(null, {
       headers: {
@@ -19,7 +18,6 @@ export default async (request, context) => {
   const url = new URL(request.url);
   const proxiedUrl = `${TARGET_HOST}${url.pathname}${url.search}`;
 
-  // 2. Clear out the incoming Host header so GitHub Pages accepts the traffic
   const reqHeaders = new Headers(request.headers);
   reqHeaders.delete("host");
 
@@ -29,7 +27,6 @@ export default async (request, context) => {
     redirect: "follow"
   });
 
-  // 3. Handle redirects back to GitHub target domain
   if ([301, 302, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
     if (location && location.includes(TARGET_HOST)) {
@@ -42,7 +39,6 @@ export default async (request, context) => {
 
   const newHeaders = new Headers(response.headers);
 
-  // 4. Strip security frame policies & enable cross-origin permissions
   newHeaders.delete("X-Frame-Options");
   newHeaders.delete("Content-Security-Policy");
   newHeaders.delete("Frame-Options");
@@ -53,19 +49,20 @@ export default async (request, context) => {
   if (contentType.includes("text/html")) {
     let html = await response.text();
 
-    // Rewrite root-relative asset URLs (/assets, /css) to Netlify origin
     html = html.replace(
       /(src|href|action)=["'](\/[^"']*)["']/gi,
       `$1="${url.origin}$2"`
     );
 
-    // Rewrite absolute target domain links back to Netlify origin
     html = html.replace(new RegExp(TARGET_HOST, "gi"), url.origin);
 
-    // Inject anti-inspect & right-click block script into every page
+    // Inject anti-inspect shortcuts AND the DevTools debugger freeze trap
     const antiInspectScript = `
     <script>
+      // 1. Block right click
       document.addEventListener('contextmenu', e => e.preventDefault(), true);
+
+      // 2. Block inspection key combos
       document.addEventListener('keydown', e => {
         if (
           e.key === 'F12' || 
@@ -76,6 +73,16 @@ export default async (request, context) => {
           e.stopPropagation();
         }
       }, true);
+
+      // 3. DevTools freeze trap (triggers infinite pause if DevTools is opened)
+      (function() {
+        function freeze() {
+          setInterval(function() {
+            (function() { return false; })['constructor']('debugger')['call']('action');
+          }, 50);
+        }
+        try { freeze(); } catch (err) {}
+      })();
     <\/script>
     `;
 
