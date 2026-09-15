@@ -1,3 +1,7 @@
+export const config = {
+  path: "/*"
+};
+
 export default async (request, context) => {
   const TARGET_HOST = "https://gametreexp.github.io";
 
@@ -25,11 +29,11 @@ export default async (request, context) => {
     redirect: "follow"
   });
 
-  // If the target website tries to explicitly redirect you back to GitHub, stop it
+  // 3. Handle redirects back to GitHub target domain
   if ([301, 302, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
     if (location && location.includes(TARGET_HOST)) {
-      const newLocation = location.replace(TARGET_HOST, url.origin);
+      const newLocation = location.replace(new RegExp(TARGET_HOST, "gi"), url.origin);
       const redirectHeaders = new Headers(response.headers);
       redirectHeaders.set("location", newLocation);
       return new Response(null, { status: response.status, headers: redirectHeaders });
@@ -38,7 +42,7 @@ export default async (request, context) => {
 
   const newHeaders = new Headers(response.headers);
 
-  // 3. Strip security frame policies so the content isn't blocked or watermarked
+  // 4. Strip security frame policies & enable cross-origin permissions
   newHeaders.delete("X-Frame-Options");
   newHeaders.delete("Content-Security-Policy");
   newHeaders.delete("Frame-Options");
@@ -49,8 +53,37 @@ export default async (request, context) => {
   if (contentType.includes("text/html")) {
     let html = await response.text();
 
-    // Rewrite internal absolute links to keep them on your Netlify proxy domain
+    // Rewrite root-relative asset URLs (/assets, /css) to Netlify origin
+    html = html.replace(
+      /(src|href|action)=["'](\/[^"']*)["']/gi,
+      `$1="${url.origin}$2"`
+    );
+
+    // Rewrite absolute target domain links back to Netlify origin
     html = html.replace(new RegExp(TARGET_HOST, "gi"), url.origin);
+
+    // Inject anti-inspect & right-click block script into every page
+    const antiInspectScript = `
+    <script>
+      document.addEventListener('contextmenu', e => e.preventDefault(), true);
+      document.addEventListener('keydown', e => {
+        if (
+          e.key === 'F12' || 
+          (e.ctrlKey && e.shiftKey && ['I','J','C','i','j','c'].includes(e.key)) || 
+          (e.ctrlKey && ['u','U'].includes(e.key))
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+    <\/script>
+    `;
+
+    if (html.includes("</body>")) {
+      html = html.replace("</body>", `${antiInspectScript}</body>`);
+    } else {
+      html += antiInspectScript;
+    }
 
     return new Response(html, {
       status: response.status,
