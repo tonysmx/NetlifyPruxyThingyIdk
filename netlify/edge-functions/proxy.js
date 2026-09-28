@@ -3,7 +3,7 @@ export const config = {
 };
 
 export default async (request, context) => {
-  const TARGET_HOST = "https://gametreexp.github.io";
+  const TARGET_HOST = "https://bog.n8-math.dev/games/boir/index.html";
 
   // 1. Handle CORS preflight OPTIONS requests
   if (request.method === "OPTIONS") {
